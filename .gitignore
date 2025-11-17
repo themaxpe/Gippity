@@ -208,4 +208,5 @@ __marimo__/
 
 # Ignore setup flag
 flag
-
+# Ignore databases
+*.db

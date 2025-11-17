@@ -2,17 +2,28 @@ from openai import OpenAI
 
 class Responder():
 
-    def __init__(self, ai_key):
-        self._ai_key = ai_key
+    def __init__(self, api_key, model: str = "", base: str = ""):
+        self._api_key = api_key
+        self._base = base
+        self.model = model
+        if self.model == "":
+            self.model = "gpt-5-nano" # Default model for now
+        self.client = self._generateClient()
 
-        self.client = OpenAI(api_key=ai_key)
+    def _generateClient(self):
+        if self._base != "": # Pointing to local ai 
+            return OpenAI(api_key=self._api_key, base_url=self._base)
+        else: # Pointing to OpenAI
+            return OpenAI(api_key=self._api_key)
 
     def generate_response(self, message: str, instructions: str):
         
         response = self.client.responses.create(
-            model = "gpt-4o-mini",
+            model = self.model,
             instructions=instructions,
             input=message
         )
-
+        
+        print(response)
+        print(len(response.output_text))
         return response.output_text

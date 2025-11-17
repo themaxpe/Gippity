@@ -10,7 +10,8 @@ from cogs.admin import Admin
 load_dotenv()
 
 bot_token = os.getenv("bot_token")
-ai_key = os.getenv("ai_key")
+ai_key = os.getenv("ai_key") or "EMPTY"
+base_url = os.getenv("base_url") or ""
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -23,7 +24,7 @@ intents.members = True
 client = Gippity(command_prefix="g!", intents=intents)
 
 # Grab AI interface
-responder = Responder(ai_key)
+responder = Responder(ai_key, "Qwen/Qwen3-1.7B", base_url)
 
 
 
@@ -59,8 +60,9 @@ async def on_message(message):
     response = responder.generate_response(message.content, instructions) 
 
     # Send response to discord
-    # TODO: Add controls for longer messages
-    await message.channel.send(response)
+    for chunk in range(len(response) % 2000):
+        await message.channel.send(response[(2000 * chunk) : (2000 * (chunk + 1))])
+        await asyncio.sleep(1) 
 
 async def main():
 

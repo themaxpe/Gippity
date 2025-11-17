@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import datetime
+import sqlite3
 
 class Gippity(commands.Bot):
 
@@ -8,22 +9,44 @@ class Gippity(commands.Bot):
     async def setup_hook(self):
         print("Hello")
         await self.load_configs()
+    
     ###################
     # SETUP FUNCTIONS #
     ###################
     
     # Used to load guild and channel config
     async def load_configs(self):
-        print("Loading guild and channel configs to memory")
+        print("Connecting to config database")
         
+        self._configdb = sqlite3.connect("config.db")
+        self._configcursor = self._configdb.cursor()
+
+        self._configcursor.execute("""CREATE TABLE IF NOT EXISTS config (
+        ENTRY_ID INTEGER IDENTITY(1, 1) PRIMARY KEY,
+        OBJECT_ID INTEGER,
+        OBJECT_TYPE TEXT,
+        KEY TEXT,
+        KEY_VALUE TEXT
+        );""")
+
+        print("Loading guild and channel configs to memory")
+    
+
+
         # Store configs into memory
         self._guild_config = {}
-
+    
+    # Load a specific guild config
+    # Assumes self.load_configs() has executed successfully, and connected to db
     async def load_config_for_guild(self, guild: discord.Guild):
        
         # guild_config[guildid] will hold all config data relevant to guild
         # "channels" and "global" distinguish between individual channel config and guild-wide config
         self._guild_config[guild.id] = {"channels":{}, "global":{}}                
+
+    ##################
+    # CONFIG METHODS #
+    ##################
 
     async def addConfigToObject(self, discordObject, option, config):
         
@@ -61,7 +84,7 @@ class Gippity(commands.Bot):
             # If guild hasn't been loaded yet (somehow)
             if discordObject.guild.id not in self._guild_config:
                 # Load it
-                await load_config_for_guild(self, discordObject.guild)
+                await self.load_config_for_guild(discordObject.guild)
 
             # If channel not yet configured
             if discordObject.id not in self._guild_config[discordObject.guild.id]["channels"]:
