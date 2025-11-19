@@ -16,12 +16,22 @@ class Responder():
         else: # Pointing to OpenAI
             return OpenAI(api_key=self._api_key)
 
-    def generate_response(self, message: str, instructions: str):
-        
+    def generate_response(self, message: str, instructions: str, images: list = []):
+        input = [{
+            "role": "user",
+            "content": [
+                {"type":"input_text", "text":message},
+            ]
+        }]
+
+        # Add images
+        for image in images:
+            input[0]["content"].append({"type":"input_image", "image_url":image})
+
         response = self.client.responses.create(
             model = self.model,
             instructions=instructions,
-            input=message
+            input=input
         )
         
         print(response)

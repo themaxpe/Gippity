@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import datetime
 import sqlite3
+import asyncio
 
 class Gippity(commands.Bot):
 
@@ -141,10 +142,29 @@ class Gippity(commands.Bot):
         
         if "author" in msg_ctx:
             instructions += f"The current message was sent by User {msg_ctx['author'].id} (username: {msg_ctx['author'].name}). "
+            if msg_ctx["author"].global_name:
+                instructions += f"The User currently has the nickname {msg_ctx['author'].global_name} this guild."
 
         if "datetime" in msg_ctx:
             time, date = self.formatTime(msg_ctx["datetime"])
             instructions += f"The current message was sent at {time} on {date}. "
+
+        if "referenced_msg" in msg_ctx:
+            message_content = await self.getMessageFromReference(msg_ctx["referenced_msg"])
+
+            instructions += f"The user is directly referencing the message with id '{msg_ctx['referenced_msg'].message_id}'."
+            if message_content:
+                instructions += f"The text content of the referenced message is: {message_content.content}"
+
+        if "guild" in msg_ctx:
+            instructions += f"The current message was sent in a guild named {msg_ctx['guild'].name}."
+            
+            nick = msg_ctx["guild"].me.nick
+            if nick:
+                instructions += f"Your current nickname in this guild is {nick}."
+            else:
+                instructions += f"You have no nickname in this guild."
+            
 
         return instructions
 
@@ -160,9 +180,17 @@ class Gippity(commands.Bot):
             previous_messages = [msg async for msg in message.channel.history(limit=51)][::-1][:-1]
 
             msg_ctx["previous_messages"] = list(map(self.formatMessage, previous_messages))
+        
+        print(msg_ctx["previous_messages"])
 
         msg_ctx["author"] = message.author
         msg_ctx["datetime"] = message.created_at
+
+        if message.guild:
+            msg_ctx["guild"] = message.guild
+        
+        if message.reference:
+            msg_ctx["referenced_msg"] = message.reference
 
         instructions = await self.genInstructions(msg_ctx)
             
@@ -177,6 +205,15 @@ class Gippity(commands.Bot):
 
         return instructions
 
+    async def getMessageFromReference(self, msg: discord.MessageReference) -> discord.Message:
+        if msg.cached_message:
+            return msg.cached_message
+
+        channel = await self.fetch_channel(msg.channel_id)
+        await asyncio.sleep(0.1)
+        if channel:
+            newMsg = await channel.fetch_message(msg.message_id)
+            return newMsg
 
     ####################
     # HELPER FUNCTIONS #
@@ -198,10 +235,10 @@ class Gippity(commands.Bot):
 
         user = ""
         if message.author == self.user:
-            user = "you"
+            user = "You"
         else:
             user = f"User {message.author.id} (username: {message.author.name})"
 
-        msgString = f"At {time} on {date}, {user} said: {message.content}"
+        msgString = f"At {time} on {date}, {user} said (messageID: {message.id}): {message.content}"
 
         return msgString

@@ -12,7 +12,7 @@ load_dotenv()
 bot_token = os.getenv("bot_token")
 ai_key = os.getenv("ai_key") or "EMPTY"
 base_url = os.getenv("base_url") or ""
-
+default_model = os.getenv("default_model") or "" # Get the default model
 intents = discord.Intents.default()
 intents.message_content = True
 intents.messages = True
@@ -24,7 +24,7 @@ intents.members = True
 client = Gippity(command_prefix="g!", intents=intents)
 
 # Grab AI interface
-responder = Responder(ai_key, "Qwen/Qwen3-1.7B", base_url)
+responder = Responder(ai_key, default_model, base_url)
 
 
 
@@ -54,10 +54,24 @@ async def on_message(message):
         return
     
     if client.user not in message.mentions:
-        return
+        if message.reference: # Sometimes references don't mention original user (for some reason) -> Always check!
+            referenceAuthor = await client.getMessageFromReference(message.reference).author
+            if referenceAuthor != client.user.id:
+                return
+        else:
+            return
     
+    if message.reference:
+        print(message.reference)
+
+    images = []
+    _imageTypes = ("image/png", "image/jpeg", "image/jpg", "image/webp")
+    for attachment in (message.attachments or []):
+        if attachment.content_type in _imageTypes:
+            images.append(attachment.url)
+
     instructions = await client.genInstructionsFromMessage(message)
-    response = responder.generate_response(message.content, instructions) 
+    response = responder.generate_response(message.content, instructions, images) 
 
     # Send response to discord
     for chunk in range(len(response) % 2000):
