@@ -1,3 +1,5 @@
+import warnings
+from cogs import admin
 import discord
 from gippity import Gippity
 import asyncio
@@ -9,10 +11,17 @@ from cogs.admin import Admin
 
 load_dotenv()
 
+# Discord config
 bot_token = os.getenv("bot_token")
+admin_user = os.getenv("bot_admin") or 0
+if admin_user == 0:
+    warnings.warn("No admin user (admin_user) ID provided. Admin commands will NOT function!")
+# Base model config
 ai_key = os.getenv("ai_key") or "EMPTY"
 base_url = os.getenv("base_url") or ""
 default_model = os.getenv("default_model") or "" # Get the default model
+
+# Discord Intents
 intents = discord.Intents.default()
 intents.message_content = True
 intents.messages = True
@@ -22,7 +31,7 @@ intents.members = True
 
 # Set up bot
 client = Gippity(command_prefix="g!", intents=intents)
-
+# TODO: Create AI model for each provided set of keys/urls
 # Grab AI interface
 responder = Responder(ai_key, default_model, base_url)
 
@@ -40,7 +49,7 @@ async def on_ready():
 
 @client.tree.command(name="sync", description="Owner only command")
 async def sync(interaction: discord.Interaction):
-    if interaction.user.id == 274620118795812864:
+    if interaction.user.id == admin_user:
         print("Requested tree sync")
         await client.tree.sync()
 
@@ -55,7 +64,8 @@ async def on_message(message):
     
     if client.user not in message.mentions:
         if message.reference: # Sometimes references don't mention original user (for some reason) -> Always check!
-            referenceAuthor = await client.getMessageFromReference(message.reference).author
+            referenceAuthor = await client.getMessageFromReference(message.reference)
+            referenceAuthor = referenceAuthor.author
             if referenceAuthor != client.user.id:
                 return
         else:

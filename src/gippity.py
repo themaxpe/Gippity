@@ -180,8 +180,6 @@ class Gippity(commands.Bot):
             previous_messages = [msg async for msg in message.channel.history(limit=51)][::-1][:-1]
 
             msg_ctx["previous_messages"] = list(map(self.formatMessage, previous_messages))
-        
-        print(msg_ctx["previous_messages"])
 
         msg_ctx["author"] = message.author
         msg_ctx["datetime"] = message.created_at
