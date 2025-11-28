@@ -9,13 +9,17 @@ from interface import Responder
 
 from cogs.admin import Admin
 
+for name, value in os.environ.items():
+    print(f"{name}:{value}")
+
 load_dotenv()
 
 # Discord config
 bot_token = os.getenv("bot_token")
-admin_user = os.getenv("bot_admin") or 0
+admin_user = os.getenv("admin_user") or 0
 if admin_user == 0:
     warnings.warn("No admin user (admin_user) ID provided. Admin commands will NOT function!")
+
 # Base model config
 ai_key = os.getenv("ai_key") or "EMPTY"
 base_url = os.getenv("base_url") or ""
@@ -31,6 +35,7 @@ intents.members = True
 
 # Set up bot
 client = Gippity(command_prefix="g!", intents=intents)
+
 # TODO: Create AI model for each provided set of keys/urls
 # Grab AI interface
 responder = Responder(ai_key, default_model, base_url)
@@ -80,7 +85,7 @@ async def on_message(message):
         if attachment.content_type in _imageTypes:
             images.append(attachment.url)
 
-    instructions = await client.genInstructionsFromMessage(message)
+    instructions = await client.genInstructionsFromMessage(message, msg_ctx={})
     response = responder.generate_response(message.content, instructions, images) 
 
     # Send response to discord

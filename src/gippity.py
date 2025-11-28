@@ -140,11 +140,6 @@ class Gippity(commands.Bot):
         if "previous_messages" in msg_ctx:
             instructions += f"Provided is a list of previous messages for added context: {msg_ctx['previous_messages']}. " 
         
-        if "author" in msg_ctx:
-            instructions += f"The current message was sent by User {msg_ctx['author'].id} (username: {msg_ctx['author'].name}). "
-            if msg_ctx["author"].global_name:
-                instructions += f"The User currently has the nickname {msg_ctx['author'].global_name} this guild."
-
         if "datetime" in msg_ctx:
             time, date = self.formatTime(msg_ctx["datetime"])
             instructions += f"The current message was sent at {time} on {date}. "
@@ -165,6 +160,10 @@ class Gippity(commands.Bot):
             else:
                 instructions += f"You have no nickname in this guild."
             
+        if "author" in msg_ctx:
+            instructions += f"The current message was sent by User {msg_ctx['author'].id} (username: {msg_ctx['author'].name}). "
+            if msg_ctx["author"].global_name:
+                instructions += f"The User currently has the nickname {msg_ctx['author'].global_name} this guild."
 
         return instructions
 
@@ -174,7 +173,7 @@ class Gippity(commands.Bot):
     async def genInstructionsFromMessage(self, message: discord.Message, msg_ctx: dict = {}):
 
         print("Generating Instruction Set")
-
+        print("previous_messages" in msg_ctx)
         if "previous_messages" not in msg_ctx:
             print("Previous Messages not provided, generating own")
             previous_messages = [msg async for msg in message.channel.history(limit=51)][::-1][:-1]
