@@ -3,14 +3,21 @@ from discord.ext import commands
 import datetime
 import sqlite3
 import asyncio
+import random
+import string
 
 class Gippity(commands.Bot):
 
     # Override commands.Bot setup hook to allow for extra data to load before setup
     async def setup_hook(self):
         print("Hello")
+        self.configParams = {
+            "listEntry":["instruction"] # All config options which can have multiple values go here
+        }
         await self.load_configs()
     
+        
+
     ###################
     # SETUP FUNCTIONS #
     ###################
@@ -19,31 +26,106 @@ class Gippity(commands.Bot):
     async def load_configs(self):
         print("Connecting to config database")
         
-        self._configdb = sqlite3.connect("config.db")
-        self._configcursor = self._configdb.cursor()
+        self.connect_to_db("config.db")
 
         self._configcursor.execute("""CREATE TABLE IF NOT EXISTS config (
-        ENTRY_ID INTEGER IDENTITY(1, 1) PRIMARY KEY,
+        ENTRY_ID CHAR(32) PRIMARY KEY,
         OBJECT_ID INTEGER,
-        OBJECT_TYPE TEXT,
-        KEY TEXT,
-        KEY_VALUE TEXT
+        OBJECT_TYPE VARCHAR(16),
+        KEY VARCHAR(32),
+        KEY_VALUE TEXT,
+        TIME_ADDED TIMESTAMP
         );""")
-
-        print("Loading guild and channel configs to memory")
-    
-
 
         # Store configs into memory
         self._guild_config = {}
+        
     
+    def connect_to_db(self, db):
+        self._configdb = sqlite3.connect(db, detect_types=sqlite3.PARSE_DECLTYPES)
+        self._configcursor = self._configdb.cursor()
+
     # Load a specific guild config
     # Assumes self.load_configs() has executed successfully, and connected to db
     async def load_config_for_guild(self, guild: discord.Guild):
-       
+        
+        print(f"Loading config for guild {guild}")
+        
+        
+
         # guild_config[guildid] will hold all config data relevant to guild
         # "channels" and "global" distinguish between individual channel config and guild-wide config
-        self._guild_config[guild.id] = {"channels":{}, "global":{}}                
+        self._guild_config[guild.id] = {"channels":{}, "global":{}}
+        
+        print("Querying Database")
+        existingConfig = self._configcursor.execute("SELECT ENTRY_ID,KEY,KEY_VALUE,TIME_ADDED FROM config WHERE OBJECT_ID = ?", (guild.id,)).fetchall()
+        
+        
+        print(existingConfig)
+        # Add item to guild config
+        for entryID,key,value,_ in sorted(existingConfig, key=lambda x: x[3]):
+             
+            if key in self.configParams["listEntry"]:
+                if key not in self._guild_config[guild.id]["global"]:
+                    self._guild_config[guild.id]["global"][key] = [(value, entryID)]
+                else:
+                    self._guild_config[guild.id]["global"][key].append((value, entryID))
+            else:
+                self._guild_config[guild.id]["global"][key] = (value, entryID)
+
+    async def load_config_for_channel(self, channel: discord.Channel):
+
+        pass
+
+
+    async def write_config_change(self, object, key: str, option: str, value = None, entryID = None):
+        print("Writing Config")
+        objectType = "channel"
+        if type(object) == discord.Guild:
+            objectType = "guild"
+        match option:
+            case "add":
+                print("Adding Config to DB")
+                
+                print(object)
+                print(key)
+                print(option)
+                print(value)
+               
+                print(entryID)
+
+                if type(value) == list:
+                    print("Value is list")
+                    value = value[0] # For now should be just one item *anyway*
+                    #TODO: Add support for multiple values
+
+                if key in self.configParams["listEntry"]:
+                    
+                    print("Adding Instruction to DB")
+                    self._configcursor.execute("""INSERT INTO config(ENTRY_ID,OBJECT_ID,OBJECT_TYPE,KEY,KEY_VALUE,TIME_ADDED) VALUES(?, ?, ?, ?, ?, ?)""", (entryID,object.id,objectType,key,value,datetime.datetime.now(),))
+                else:
+                    if len(self._configcursor.execute("SELECT * FROM config WHERE OBJECT_ID = ? AND KEY = ?;", (object.id, key,)).fetchall()) > 0:
+                        self._configcursor.execute("UPDATE config SET KEY_VALUE = ? WHERE OBJECT_ID = ? AND KEY = ?;", (value, object.id, key,))
+                    else:
+                        self._configcursor.execute("""INSERT INTO config(ENTRY_ID,OBJECT_ID,OBJECT_TYPE,KEY,KEY_VALUE,TIME_ADDED) VALUES(?, ?, ?, ?, ?, ?)""", (entryID,object.id,objectType,key,value,datetime.datetime.now(),))
+            case "remove":
+                if key in self.configParams["listEntry"]:
+                    if value is None:
+                        return
+                    
+                    # Get entry ID
+                    if not entryID:
+                        objectConfig = await self.getObjectConfigOption(object, key)
+                        if objectConfig is None:
+                            print("Empty config returned on remove request")
+                            return
+
+                        entryID = objectConfig[value][1]
+                    #print(objectConfigID)
+                    self._configcursor.execute("""DELETE FROM config WHERE ENTRY_ID=?""", (entryID,))
+                print("Removing config from DB")
+
+        self._configdb.commit()
 
     ##################
     # CONFIG METHODS #
@@ -51,22 +133,22 @@ class Gippity(commands.Bot):
 
     async def addConfigToObject(self, discordObject, option, config):
         
-
+        entryID = self.semirandomString() # Yes, ID *should* be hashed in some form to guaruntee uniqueness. This is good enough for now give me a break :)
         # First get old config
         newConfig = await self.getObjectConfigOption(discordObject, option)
         if newConfig is None:
 
             # No need to worry about 
-            if option in ["instructions"]:
-                config = [config]
+            if option in self.configParams["listEntry"]:
+                newConfig = [(config, entryID)]
+            else:
+                newConfig = (config, entryID)
 
-            newConfig = config
-
-        elif option in ["instructions"]:
-            newConfig.append(config)
+        elif option in self.configParams["listEntry"]:
+            newConfig.append((config, entryID))
 
         else:
-            newConfig = config
+            newConfig = (config, entryID)
         
 
     
@@ -98,15 +180,61 @@ class Gippity(commands.Bot):
         else:
             return False
 
+        await self.write_config_change(discordObject, option, "add", config, entryID)
+        return True
+
+    async def removeConfigFromObject(self, discordObject, option, config = None) -> bool:
+        currentConfig = await self.getObjectConfigOption(discordObject, option)
+        if currentConfig is None:
+            print("No existing config, just skip I guess")
+            return True # Need to return message to user
+
+        if option in self.configParams["listEntry"]:
+            if config is None:
+                print("No config provided")
+                return False
+            try:
+                config = int(config)
+                config -= 1 # Adjust for 0-indexing
+            except:
+                print("Config provided is not of type int")
+                return False
+
+            # Config will represent the index of the item to remove
+            if config > (len(currentConfig) - 1):
+                # Throw Error then return
+                print("Out of bounds error")
+                return False
+
+            entryID = currentConfig[config][1]
+            if type(discordObject) == discord.Guild:
+                self._guild_config[discordObject.id]["global"][option].pop(config)
+            elif type(discordObject) == discord.TextChannel:
+                self._guild_config[discordObject.guild.id]["channels"][discordObject.id][option].pop(config)
+
+            await self.write_config_change(discordObject, option, "remove", config, entryID)
+        else:
+            # Config should be empty
+
+            pass
+        
         return True
 
     async def getObjectConfig(self, discordObject):
-        
+        print(self._guild_config) 
         if type(discordObject) == discord.Guild:
+            if discordObject.id not in self._guild_config:
+                # Try to get existing config
+                await self.load_config_for_guild(discordObject)
+                
+            # Make sure existing config checked
             if discordObject.id in self._guild_config:
                 return self._guild_config[discordObject.id]["global"]
+
                                             
         elif type(discordObject) == discord.TextChannel:
+            if discordObject.guild.id not in self._guild_config:
+                await self.load_config_for_guild(discordObject.guild)
             # If channel guild is configured
             if discordObject.guild.id in self._guild_config:
                 # If channel is configured within said guild
@@ -173,12 +301,14 @@ class Gippity(commands.Bot):
     async def genInstructionsFromMessage(self, message: discord.Message, msg_ctx: dict = {}):
 
         print("Generating Instruction Set")
-        print("previous_messages" in msg_ctx)
+        #print("previous_messages" in msg_ctx)
         if "previous_messages" not in msg_ctx:
             print("Previous Messages not provided, generating own")
             previous_messages = [msg async for msg in message.channel.history(limit=51)][::-1][:-1]
 
             msg_ctx["previous_messages"] = list(map(self.formatMessage, previous_messages))
+
+            print("Got previous messages")
 
         msg_ctx["author"] = message.author
         msg_ctx["datetime"] = message.created_at
@@ -190,15 +320,22 @@ class Gippity(commands.Bot):
             msg_ctx["referenced_msg"] = message.reference
 
         instructions = await self.genInstructions(msg_ctx)
-            
+        
+        
+
         guildInstructions = await self.getObjectConfigOption(message.guild, "instruction")
         channelInstructions = await self.getObjectConfigOption(message.channel, "instruction")
 
+        print(guildInstructions)
+        print(channelInstructions)
+
         if guildInstructions is not None:
-            instructions += guildInstructions
+            for guildInstruction in guildInstructions:
+                instructions += guildInstruction
 
         if channelInstructions is not None:
-            instructions += channelInstructions
+            for channelInstruction in channelInstructions:
+                instructions += channelInstruction
 
         return instructions
 
@@ -239,3 +376,7 @@ class Gippity(commands.Bot):
         msgString = f"At {time} on {date}, {user} said (messageID: {message.id}): {message.content}"
 
         return msgString
+
+    def semirandomString(self, length=32, charset=string.ascii_letters + string.digits):
+        return ''.join(random.choice(charset) for _ in range(length))
+        

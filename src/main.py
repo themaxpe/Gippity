@@ -1,5 +1,5 @@
 import warnings
-from cogs import admin
+#from cogs import admin
 import discord
 from gippity import Gippity
 import asyncio
@@ -9,14 +9,11 @@ from interface import Responder
 
 from cogs.admin import Admin
 
-for name, value in os.environ.items():
-    print(f"{name}:{value}")
-
 load_dotenv()
 
 # Discord config
 bot_token = os.getenv("bot_token")
-admin_user = os.getenv("admin_user") or 0
+admin_user = int(os.getenv("admin_user")) or 0
 if admin_user == 0:
     warnings.warn("No admin user (admin_user) ID provided. Admin commands will NOT function!")
 
@@ -31,7 +28,6 @@ intents.message_content = True
 intents.messages = True
 intents.guilds = True
 intents.members = True
-#intents.mentions = True
 
 # Set up bot
 client = Gippity(command_prefix="g!", intents=intents)
@@ -54,6 +50,7 @@ async def on_ready():
 
 @client.tree.command(name="sync", description="Owner only command")
 async def sync(interaction: discord.Interaction):
+    print(f"{interaction.user} ({interaction.user.id}) requested a sync")
     if interaction.user.id == admin_user:
         print("Requested tree sync")
         await client.tree.sync()
@@ -86,6 +83,7 @@ async def on_message(message):
             images.append(attachment.url)
 
     instructions = await client.genInstructionsFromMessage(message, msg_ctx={})
+    print("Instructions Generated")
     response = responder.generate_response(message.content, instructions, images) 
 
     # Send response to discord

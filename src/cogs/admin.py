@@ -44,28 +44,45 @@ class Admin(commands.Cog):
         
         elif option == "view":
             
-            config = await self.bot.getObjectConfig(obj)
-            print(config)
+            config = await self.bot.getObjectConfigOption(obj, "instruction")
             
             embed = discord.Embed(
-            title="Config",
-            description=f"Current config for {obj.name}"
+            title="Instructions",
+            description=f"Current Instructions in {obj.name}"
             )
             
-            for key in config:
-                embed.add_field(name=key, value=config[key])
+            if config is None:
+                embed.add_field(name="Empty Config", value=f"No custom instructions in {obj.name}, try using /instruction")
+                config = [] # Pass empty config option to for loop :)
+
+            if len(config) > 0:
+                instructions = []
+                for x in range(len(config)):
+                    instructions.append(f"{x+1} ) {config[x][0]}")
+    
+                embed.add_field(name="Instructions", value='\n'.join(instructions))
+                #embed.add_field(name="Instructions", value='\n'.join(map(lambda x: x[0], config)))
 
             await interaction.response.send_message(embed=embed)
 
-            #print("Someone wants to view instructions")
 
         elif option == "remove":
             print("Someone wants to remove instructions")
+            # Instruction will hold the number of the instruction to remove
+            await self.bot.removeConfigFromObject(obj, "instruction", instruction) 
+
 
         else:
             print("Uh oh")
 
-
+    @app_commands.command(name="configure", description="Change bot settings")
+    @app_commands.describe(
+        scope="Guild-wide (guild) or channel-wide (channel)",
+        option="Configuration key to change",
+        value="New value for the key"
+    )
+    async def configure_settings(self, interaction: discord.Interaction, scope: str, option: str, value: str):
+        pass
 
 
         
