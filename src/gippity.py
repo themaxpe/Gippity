@@ -6,6 +6,12 @@ import asyncio
 import random
 import string
 
+####################
+## NOTE FOR LATER ##
+####################
+# Print statements serve debugging rn   
+# They'll be adjusted when a debug-mode is added!
+
 class Gippity(commands.Bot):
 
     # Override commands.Bot setup hook to allow for extra data to load before setup
@@ -50,9 +56,8 @@ class Gippity(commands.Bot):
     async def load_config_for_guild(self, guild: discord.Guild):
         
         print(f"Loading config for guild {guild}")
-        
-        
-
+        if guild.id in self._guild_config:
+            return
         # guild_config[guildid] will hold all config data relevant to guild
         # "channels" and "global" distinguish between individual channel config and guild-wide config
         self._guild_config[guild.id] = {"channels":{}, "global":{}}
@@ -74,8 +79,28 @@ class Gippity(commands.Bot):
                 self._guild_config[guild.id]["global"][key] = (value, entryID)
 
     async def load_config_for_channel(self, channel: discord.Channel):
+        if channel.guild.id not in self._guild_config:
+            await self.load_config_for_guild(channel.guild)
+        
+        guild = channel.guild
 
-        pass
+        self._guild_config[channel.guild.id]["channels"][channel.id] = {}
+
+        print("Querying Database")
+        existingConfig = self._configcursor.execute("SELECT ENTRY_ID,KEY,KEY_VALUE,TIME_ADDED FROM config WHERE OBJECT_ID = ?", (channel.id,)).fetchall()
+        
+        
+        print(existingConfig)
+        # Add item to guild config
+        for entryID,key,value,_ in sorted(existingConfig, key=lambda x: x[3]):
+             
+            if key in self.configParams["listEntry"]:
+                if key not in self._guild_config[guild.id]["channels"][channel.id]:
+                    self._guild_config[guild.id]["channels"][channel.id][key] = [(value, entryID)]
+                else:
+                    self._guild_config[guild.id]["channels"][channel.id][key].append((value, entryID))
+            else:
+                self._guild_config[guild.id]["channels"][channel.id][key] = (value, entryID)
 
 
     async def write_config_change(self, object, key: str, option: str, value = None, entryID = None):
@@ -235,6 +260,9 @@ class Gippity(commands.Bot):
         elif type(discordObject) == discord.TextChannel:
             if discordObject.guild.id not in self._guild_config:
                 await self.load_config_for_guild(discordObject.guild)
+            
+            if discordObject.id not in self._guild_config[discordObject.guild.id]:
+                await self.load_config_for_channel(discordObject)
             # If channel guild is configured
             if discordObject.guild.id in self._guild_config:
                 # If channel is configured within said guild
@@ -324,7 +352,9 @@ class Gippity(commands.Bot):
         
 
         guildInstructions = await self.getObjectConfigOption(message.guild, "instruction")
+        guildInstructions = map(lambda x: x[0], guildInstructions)
         channelInstructions = await self.getObjectConfigOption(message.channel, "instruction")
+        channelInstructions = map(lambda x: x[0], channelInstructions)
 
         print(guildInstructions)
         print(channelInstructions)
