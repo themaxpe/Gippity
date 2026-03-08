@@ -11,6 +11,7 @@ import string
 ####################
 # Print statements serve debugging rn   
 # They'll be adjusted when a debug-mode is added!
+# Yes, I'm aware all my utilities are in one monolithic class. It works and I don't need it to be broken off yet.
 
 class Gippity(commands.Bot):
 
@@ -378,6 +379,14 @@ class Gippity(commands.Bot):
         if channel:
             newMsg = await channel.fetch_message(msg.message_id)
             return newMsg
+
+    ###############
+    # INFORMATION #
+    ###############
+    async def userHasPermission(self, user: discord.User, permission: str) -> bool:
+        # TODO: Process permissions with conditions
+        return True
+
 
     ####################
     # HELPER FUNCTIONS #

@@ -20,8 +20,13 @@ class Admin(commands.Cog):
             instruction="The new instruction, or the instruction to remove",
     )
     async def manage_instruction(self, interaction: discord.Interaction, scope: str, option: str, instruction: str = ""):
+        userIsAdmin = await self.bot.userHasPermission(interaction.user, "ADMIN") 
+        if not userIsAdmin:
+            await interaction.response.send_message("You do not have permissions to run this command")
+            return
 
         if option.lower() not in ["add", "view", "remove"]:
+            await interaction.response.send_message("Valid option not provided")
             return
    
         obj = None
